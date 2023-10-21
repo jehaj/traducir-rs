@@ -1,17 +1,18 @@
 use sqlite;
 use std::fs::remove_file;
 use std::path::Path;
+use scraper::{Html, Selector};
+use sqlite::State;
 
 struct Entry {
     english: String,
     danish: String,
-    description: String,
     source: String,
     active: i32
 }
 
 fn main() {
-    let path_to_db = Path::new(get_database_name().as_str());
+    let path_to_db = Path::new(get_database_name());
     let db_existed = path_to_db.exists();
     print!("Opening connection to database... ");
     let connection = sqlite::open(get_database_name()).unwrap();
@@ -19,6 +20,7 @@ fn main() {
     if !db_existed {
         println!("Creating schemas and filling db with data.");
         // create schemas
+        connection.execute(get_schema_begreber()).expect("Failed to create table.");
         // tell to download raw data if not exists (use download.sh) and exit
         // scrape downloaded data
         let mut entries = vec![];
@@ -26,6 +28,7 @@ fn main() {
         entries.append(&mut get_entries_from_sdu());
         entries.append(&mut get_entries_from_topdatamat());
         // insert entries into db
+        connection.execute("BEGIN TRANSACTION;").unwrap();
         let query = "INSERT INTO Begreber (EngelskUdgave, DanskUdgave, Kilde) VALUES (?, ?, ?)";
         let mut statement = connection.prepare(query).expect("Prepared statement.");
         for entry in entries {
@@ -35,8 +38,9 @@ fn main() {
             statement.bind((3, entry.source.as_str())).expect("Failed binding third parameter");
             statement.next().expect("Failed to execute prepared statement.");
         }
+        connection.execute("COMMIT;").unwrap();
     }
-    delete_database();
+    //delete_database();
     println!("See you next time :)");
 }
 
@@ -47,15 +51,14 @@ fn delete_database() {
     };
 }
 
-fn get_database_name() -> String {
-    String::from("db.db")
+fn get_database_name() -> &'static str {
+    "db.db"
 }
 
 fn get_schema_begreber() -> String {
     String::from("CREATE TABLE \"Begreber\" (
 	\"EngelskUdgave\"	TEXT NOT NULL,
 	\"DanskUdgave\"	TEXT NOT NULL,
-	\"Beskrivelse\"	TEXT,
 	\"Kilde\"         TEXT,
 	\"Aktiv\"         INTEGER DEFAULT 1,
 	\"Id\"	INTEGER,
@@ -83,14 +86,42 @@ fn get_optimize_query() -> String {
 }
 
 fn get_entries_from_klid() -> Vec<Entry> {
+    let mut entries = vec![];
+    let html = std::fs::read_to_string("raw_data/klid.html")
+        .expect("Failed to read klid.html");
 
+    let document = Html::parse_document(html.as_str());
+    let selector = Selector::parse("body > pre > b").unwrap();
+
+    for element in document.select(&selector) {
+        let alphabet_text = element.next_sibling().expect("yes").value().as_text().unwrap().trim();
+        let alphabet_text = alphabet_text.replace('\t', "        ");
+        let texts = alphabet_text.split('\n');
+        for text in texts {
+            // remove bad entries: apparently all of which are below 32 in length
+            if text.len() < 32 { continue; }
+            let key = text[0..32].trim();
+            let value = text[32..].trim();
+            // add entry
+            let entry = Entry {
+                english: key.to_string(),
+                danish: value.to_string(),
+                source: "klid.dk".to_string(),
+                active: 1,
+            };
+            entries.push(entry);
+        }
+    }
+    entries
 }
 
-
 fn get_entries_from_sdu() -> Vec<Entry> {
-
+    let mut entries = vec![];
+    entries
 }
 
 fn get_entries_from_topdatamat() -> Vec<Entry> {
+    let mut entries = vec![];
+    entries
 
 }
