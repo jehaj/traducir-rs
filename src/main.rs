@@ -2,7 +2,6 @@ use sqlite;
 use std::fs::remove_file;
 use std::path::Path;
 use scraper::{Html, Selector};
-use sqlite::State;
 
 struct Entry {
     english: String,
@@ -39,6 +38,12 @@ fn main() {
             statement.next().expect("Failed to execute prepared statement.");
         }
         connection.execute("COMMIT;").unwrap();
+        print!("Data inserted. Optimise for search... ");
+        connection.execute(get_schema_index()).unwrap();
+        connection.execute(get_data_query()).unwrap();
+        connection.execute(get_optimize_query()).unwrap();
+        println!("done.");
+
     }
     //delete_database();
     println!("See you next time :)");
@@ -117,11 +122,47 @@ fn get_entries_from_klid() -> Vec<Entry> {
 
 fn get_entries_from_sdu() -> Vec<Entry> {
     let mut entries = vec![];
+    let html = std::fs::read_to_string("raw_data/sdu.html")
+        .expect("Failed to read sdu.html");
+
+    let document = Html::parse_document(html.as_str());
+    let selector = Selector::parse("body > table:nth-child(1) > tbody:nth-child(1) > tr:nth-child(1) > td:nth-child(1) > em").unwrap();
+
+    for element in document.select(&selector) {
+        let key = element.text().next().unwrap();
+        let value = &element.next_sibling().unwrap().value().as_text().unwrap().trim()[1..].trim();
+        let entry = Entry {
+            english: key.to_string(),
+            danish: value.to_string(),
+            source: "sdu.dk".to_string(),
+            active: 1,
+        };
+        entries.push(entry);
+    }
     entries
 }
 
 fn get_entries_from_topdatamat() -> Vec<Entry> {
     let mut entries = vec![];
-    entries
+    let html = std::fs::read_to_string("raw_data/topdatamat.html")
+        .expect("Failed to read topdatamat.html");
 
+    let document = Html::parse_document(html.as_str());
+    let selector_title = Selector::parse(".dictionary > dt").unwrap();
+    let selector_body = Selector::parse(".dictionary > dd").unwrap();
+
+    let elements = document.select(&selector_title).zip(document.select(&selector_body));
+
+    for (element_title, element_body) in elements {
+        let value = element_title.text().next().unwrap().trim();
+        let key = &element_body.text().next().unwrap().trim();
+        let entry = Entry {
+            english: key.to_string(),
+            danish: value.to_string(),
+            source: "topdatamat.dk".to_string(),
+            active: 1,
+        };
+        entries.push(entry);
+    }
+    entries
 }
