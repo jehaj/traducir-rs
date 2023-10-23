@@ -1,0 +1,24 @@
+body {
+    max-width: 750px;
+    margin: 0 auto;
+}
+
+.box {
+    display: flex;
+    flex-direction: row;
+    margin-bottom: 15px;
+    gap: 20px;
+    border-bottom: 1px solid black;
+}
+
+.box > p:first-child {
+    width: 33%;
+}
+
+.box > p:last-child {
+    flex: 0;
+}
+
+.box > p:nth-child(2) {
+    flex: 1;
+}

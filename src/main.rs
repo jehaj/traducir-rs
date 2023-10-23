@@ -1,16 +1,19 @@
-use rusqlite::{Connection};
+use rusqlite::{Connection, OpenFlags};
 use std::fs::remove_file;
 use std::path::Path;
 use scraper::{Html, Selector};
+use serde::Serialize;
+use warp::Filter;
 
+#[derive(Serialize)]
 struct Entry {
     english: String,
     danish: String,
-    source: String,
-    active: i32
+    source: String
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let path_to_db = Path::new(get_database_name());
     let db_exists = path_to_db.exists();
     print!("Opening connection to database... ");
@@ -20,6 +23,32 @@ fn main() {
         create_and_fill_db(&connection);
     }
 
+    const QUERY_TEMPLATE: &str = "SELECT * FROM fts WHERE fts MATCH ? ORDER BY rank LIMIT 20;";
+    let hello = warp::path!(String)
+        .map(|query: String| {
+            let query = query.replace("%20", " ");
+            let query = query.trim();
+            let connection = Connection::open_with_flags(get_database_name(), OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+            let mut statement = connection.prepare(QUERY_TEMPLATE).unwrap();
+            let entries = statement.query_map([query], |row| Ok(Entry {
+                english: row.get(0).unwrap(),
+                danish: row.get(1).unwrap(),
+                source: row.get(2).unwrap()
+            })).unwrap();
+            let mut results = vec![];
+            for entry in entries {
+                results.push(entry.unwrap());
+            }
+            warp::reply::json(& results)
+        });
+
+    let cors = warp::cors()
+        .allow_any_origin();
+
+    warp::serve(hello.with(cors))
+        .run(([127, 0, 0, 1], 3030))
+        .await;
+
     //delete_database();
     println!("See you next time :)");
 }
@@ -27,7 +56,7 @@ fn main() {
 fn create_and_fill_db(connection: &Connection) {
     println!("Creating schemas and filling db with data.");
     // create schemas
-    connection.execute(get_schema_begreber().as_str(), ()).expect("Failed to create table.");
+    connection.execute(get_schema_begreber(), ()).expect("Failed to create table.");
     // tell to download raw data if not exists (use download.sh) and exit
     // scrape downloaded data
     let mut entries = vec![];
@@ -46,9 +75,9 @@ fn create_and_fill_db(connection: &Connection) {
     }
     connection.execute("COMMIT;", ()).unwrap();
     print!("Data inserted. Optimise for search... ");
-    connection.execute(get_schema_index().as_str(), ()).unwrap();
-    connection.execute(get_data_query().as_str(), ()).unwrap();
-    connection.execute(get_optimize_query().as_str(), ()).unwrap();
+    connection.execute(get_schema_index(), ()).unwrap();
+    connection.execute(get_data_query(), ()).unwrap();
+    connection.execute(get_optimize_query(), ()).unwrap();
     println!("done.");
 }
 
@@ -63,34 +92,34 @@ fn get_database_name() -> &'static str {
     "db.db"
 }
 
-fn get_schema_begreber() -> String {
-    String::from("CREATE TABLE \"Begreber\" (
+fn get_schema_begreber() -> &'static str {
+    "CREATE TABLE \"Begreber\" (
 	\"EngelskUdgave\"	TEXT NOT NULL,
 	\"DanskUdgave\"	TEXT NOT NULL,
 	\"Kilde\"         TEXT,
-	\"Aktiv\"         INTEGER DEFAULT 1,
 	\"Id\"	INTEGER,
 	PRIMARY KEY(\"Id\" AUTOINCREMENT)
-);")
+);"
 }
 
-fn get_schema_index() -> String {
-    String::from("CREATE VIRTUAL TABLE fts USING fts5(
+fn get_schema_index() -> &'static str {
+    "CREATE VIRTUAL TABLE fts USING fts5(
     EngelskUdgave,
     DanskUdgave,
     Kilde UNINDEXED,
     Id UNINDEXED,
     content=Begreber,
-    content_rowid=Id
-);")
+    content_rowid=Id,
+    tokenize='trigram'
+);"
 }
 
-fn get_data_query() -> String {
-    String::from("INSERT INTO fts SELECT EngelskUdgave, DanskUdgave, Kilde, Id FROM Begreber;")
+fn get_data_query() -> &'static str {
+    "INSERT INTO fts SELECT EngelskUdgave, DanskUdgave, Kilde, Id FROM Begreber;"
 }
 
-fn get_optimize_query() -> String {
-    String::from("INSERT INTO fts(fts) VALUES('optimize');")
+fn get_optimize_query() -> &'static str {
+    "INSERT INTO fts(fts) VALUES('optimize');"
 }
 
 fn get_entries_from_klid() -> Vec<Entry> {
@@ -114,8 +143,7 @@ fn get_entries_from_klid() -> Vec<Entry> {
             let entry = Entry {
                 english: key.to_string(),
                 danish: value.to_string(),
-                source: "klid.dk".to_string(),
-                active: 1,
+                source: "klid.dk".to_string()
             };
             entries.push(entry);
         }
@@ -137,8 +165,7 @@ fn get_entries_from_sdu() -> Vec<Entry> {
         let entry = Entry {
             english: key.to_string(),
             danish: value.to_string(),
-            source: "sdu.dk".to_string(),
-            active: 1,
+            source: "sdu.dk".to_string()
         };
         entries.push(entry);
     }
@@ -162,8 +189,7 @@ fn get_entries_from_topdatamat() -> Vec<Entry> {
         let entry = Entry {
             english: key.to_string(),
             danish: value.to_string(),
-            source: "topdatamat.dk".to_string(),
-            active: 1,
+            source: "topdatamat.dk".to_string()
         };
         entries.push(entry);
     }
