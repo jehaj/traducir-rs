@@ -1,4 +1,4 @@
-use sqlite;
+use rusqlite::{Connection};
 use std::fs::remove_file;
 use std::path::Path;
 use scraper::{Html, Selector};
@@ -12,41 +12,44 @@ struct Entry {
 
 fn main() {
     let path_to_db = Path::new(get_database_name());
-    let db_existed = path_to_db.exists();
+    let db_exists = path_to_db.exists();
     print!("Opening connection to database... ");
-    let connection = sqlite::open(get_database_name()).unwrap();
+    let connection = Connection::open(get_database_name()).unwrap();
     println!("done.");
-    if !db_existed {
-        println!("Creating schemas and filling db with data.");
-        // create schemas
-        connection.execute(get_schema_begreber()).expect("Failed to create table.");
-        // tell to download raw data if not exists (use download.sh) and exit
-        // scrape downloaded data
-        let mut entries = vec![];
-        entries.append(&mut get_entries_from_klid());
-        entries.append(&mut get_entries_from_sdu());
-        entries.append(&mut get_entries_from_topdatamat());
-        // insert entries into db
-        connection.execute("BEGIN TRANSACTION;").unwrap();
-        let query = "INSERT INTO Begreber (EngelskUdgave, DanskUdgave, Kilde) VALUES (?, ?, ?)";
-        let mut statement = connection.prepare(query).expect("Prepared statement.");
-        for entry in entries {
-            statement.reset().expect("Failed to reset statement");
-            statement.bind((1, entry.english.as_str())).expect("Failed binding first parameter");
-            statement.bind((2, entry.danish.as_str())).expect("Failed binding second parameter");
-            statement.bind((3, entry.source.as_str())).expect("Failed binding third parameter");
-            statement.next().expect("Failed to execute prepared statement.");
-        }
-        connection.execute("COMMIT;").unwrap();
-        print!("Data inserted. Optimise for search... ");
-        connection.execute(get_schema_index()).unwrap();
-        connection.execute(get_data_query()).unwrap();
-        connection.execute(get_optimize_query()).unwrap();
-        println!("done.");
-
+    if !db_exists {
+        create_and_fill_db(&connection);
     }
+
     //delete_database();
     println!("See you next time :)");
+}
+
+fn create_and_fill_db(connection: &Connection) {
+    println!("Creating schemas and filling db with data.");
+    // create schemas
+    connection.execute(get_schema_begreber().as_str(), ()).expect("Failed to create table.");
+    // tell to download raw data if not exists (use download.sh) and exit
+    // scrape downloaded data
+    let mut entries = vec![];
+    entries.append(&mut get_entries_from_klid());
+    entries.append(&mut get_entries_from_sdu());
+    entries.append(&mut get_entries_from_topdatamat());
+    // insert entries into db
+    connection.execute("BEGIN TRANSACTION;", ()).unwrap();
+    let query = "INSERT INTO Begreber (EngelskUdgave, DanskUdgave, Kilde) VALUES (?, ?, ?)";
+    let mut statement = connection.prepare(query).expect("Prepared statement.");
+    for entry in entries {
+        statement.execute((entry.english,
+                           entry.danish,
+                           entry.source))
+            .expect("Could not insert entry.");
+    }
+    connection.execute("COMMIT;", ()).unwrap();
+    print!("Data inserted. Optimise for search... ");
+    connection.execute(get_schema_index().as_str(), ()).unwrap();
+    connection.execute(get_data_query().as_str(), ()).unwrap();
+    connection.execute(get_optimize_query().as_str(), ()).unwrap();
+    println!("done.");
 }
 
 fn delete_database() {
