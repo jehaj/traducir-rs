@@ -45,8 +45,11 @@ async fn main() {
     let cors = warp::cors()
         .allow_any_origin();
 
+    let port = 3030;
+    let address = [127, 0, 0, 1];
+    println!("Now listening on http://{}:{port}", address.map(|x| x.to_string()).join("."));
     warp::serve(hello.with(cors))
-        .run(([127, 0, 0, 1], 3030))
+        .run((address, port))
         .await;
 
     //delete_database();
