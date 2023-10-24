@@ -25,8 +25,9 @@ inputSearch.addEventListener("input", () => {
     timer = setTimeout(() => {
         let value = inputSearch.value;
         if (value.length >= 3) {
-            fetch(`http://localhost:3030/${value}`, {
-                method: "GET"
+            fetch(`http://localhost:3030/`, {
+                method: "POST",
+                body: value
             }).then(res => res.json())
               .then(posts => {
                 boxesDiv.innerHTML = "";

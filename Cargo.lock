@@ -1263,6 +1263,7 @@ dependencies = [
 name = "traducir-rs"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "rusqlite",
  "scraper",
  "serde",

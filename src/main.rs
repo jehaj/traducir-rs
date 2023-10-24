@@ -24,9 +24,10 @@ async fn main() {
     }
 
     const QUERY_TEMPLATE: &str = "SELECT * FROM fts WHERE fts MATCH ? ORDER BY rank LIMIT 20;";
-    let hello = warp::path!(String)
-        .map(|query: String| {
-            let query = query.replace("%20", " ");
+    let hello = warp::body::content_length_limit(1024 * 32)
+        .and(warp::body::bytes())
+        .map(|bytes: bytes::Bytes| {
+            let query = String::from_utf8(Vec::from(bytes)).unwrap();
             let query = query.trim();
             let connection = Connection::open_with_flags(get_database_name(), OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
             let mut statement = connection.prepare(QUERY_TEMPLATE).unwrap();
