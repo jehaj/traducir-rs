@@ -9,7 +9,7 @@ use std::env;
 struct Entry {
     english: String,
     danish: String,
-    source: String
+    source: String,
 }
 
 #[tokio::main]
@@ -35,13 +35,13 @@ async fn main() {
             let entries = statement.query_map([query], |row| Ok(Entry {
                 english: row.get(0).unwrap(),
                 danish: row.get(1).unwrap(),
-                source: row.get(2).unwrap()
+                source: row.get(2).unwrap(),
             })).unwrap();
             let mut results = vec![];
             for entry in entries {
                 results.push(entry.unwrap());
             }
-            warp::reply::json(& results)
+            warp::reply::json(&results)
         });
 
     let cors = warp::cors()
@@ -159,7 +159,7 @@ fn get_entries_from_klid() -> Vec<Entry> {
             let entry = Entry {
                 english: key.to_string(),
                 danish: value.to_string(),
-                source: "klid.dk".to_string()
+                source: "klid.dk".to_string(),
             };
             entries.push(entry);
         }
@@ -181,7 +181,7 @@ fn get_entries_from_sdu() -> Vec<Entry> {
         let entry = Entry {
             english: key.to_string(),
             danish: value.to_string(),
-            source: "sdu.dk".to_string()
+            source: "sdu.dk".to_string(),
         };
         entries.push(entry);
     }
@@ -205,7 +205,7 @@ fn get_entries_from_topdatamat() -> Vec<Entry> {
         let entry = Entry {
             english: key.to_string(),
             danish: value.to_string(),
-            source: "topdatamat.dk".to_string()
+            source: "topdatamat.dk".to_string(),
         };
         entries.push(entry);
     }
