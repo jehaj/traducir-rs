@@ -1,9 +1,9 @@
 use rusqlite::{Connection, OpenFlags};
-use std::fs::remove_file;
 use std::path::Path;
 use scraper::{Html, Selector};
 use serde::Serialize;
 use warp::Filter;
+use std::env;
 
 #[derive(Serialize)]
 struct Entry {
@@ -14,6 +14,7 @@ struct Entry {
 
 #[tokio::main]
 async fn main() {
+    let args: Vec<String> = env::args().collect();
     let path_to_db = Path::new(get_database_name());
     let db_exists = path_to_db.exists();
     print!("Opening connection to database... ");
@@ -46,15 +47,33 @@ async fn main() {
     let cors = warp::cors()
         .allow_any_origin();
 
-    let port = 3030;
-    let address = [127, 0, 0, 1];
+    println!("{:?}", args);
+    let port = get_port_number(&args);
+    let address = get_ip_address(&args);
     println!("Now listening on http://{}:{port}", address.map(|x| x.to_string()).join("."));
     warp::serve(hello.with(cors))
         .run((address, port))
         .await;
 
-    //delete_database();
     println!("See you next time :)");
+}
+
+fn get_port_number(args: &Vec<String>) -> u16 {
+    if args.len() > 2 {
+        args[2].parse().unwrap()
+    } else {
+        3030
+    }
+}
+
+fn get_ip_address(args: &Vec<String>) -> [u8; 4] {
+    if args.len() > 1 {
+        let mut address: [u8; 4] = [0, 0, 0, 0];
+        args[1].split(".").enumerate().for_each(|(i, v)| address[i] = v.parse().unwrap());
+        address
+    } else {
+        [127, 0, 0, 1]
+    }
 }
 
 fn create_and_fill_db(connection: &Connection) {
@@ -83,13 +102,6 @@ fn create_and_fill_db(connection: &Connection) {
     connection.execute(get_data_query(), ()).unwrap();
     connection.execute(get_optimize_query(), ()).unwrap();
     println!("done.");
-}
-
-fn delete_database() {
-    match remove_file(get_database_name()) {
-        Ok(_) => println!("Successfully deleted database."),
-        Err(_) => println!("An error happened while deleting database.")
-    };
 }
 
 fn get_database_name() -> &'static str {
